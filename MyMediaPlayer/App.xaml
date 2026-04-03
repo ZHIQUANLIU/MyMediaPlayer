@@ -1,0 +1,15 @@
+<Application x:Class="MyMediaPlayer.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:MyMediaPlayer"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="BackgroundBrush" Color="White"/>
+        <SolidColorBrush x:Key="SecondaryBrush" Color="#F3F3F3"/>
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#0078D4"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#106EBE"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#1A1A1A"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#C8C8C8"/>
+        <SolidColorBrush x:Key="HoverBrush" Color="#DCDCDC"/>
+    </Application.Resources>
+</Application>
