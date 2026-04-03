@@ -178,26 +178,26 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <Grid>
-                        <TextBlock Text="Playlist" FontSize="14" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextBrush}"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button Style="{StaticResource MenuButtonStyle}" Content="Sort by Title"
-                                    Command="{Binding SortByTitleCommand}"/>
-                            <Button Style="{StaticResource MenuButtonStyle}" Content="Sort by Duration"
-                                    Command="{Binding SortByDurationCommand}"/>
-                            <Button Style="{StaticResource MenuButtonStyle}" Content="Sort by Date"
-                                    Command="{Binding SortByDateCommand}"/>
-                        </StackPanel>
-                    </Grid>
+                    <TextBlock Text="Playlist" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"/>
 
-                    <DataGrid x:Name="PlaylistDataGrid" Grid.Row="1"
+                    <Border Grid.Row="1" Background="{DynamicResource PrimaryBrush}" CornerRadius="4" Padding="12,8" Margin="0,8,0,8"
+                            Visibility="{Binding CurrentMedia, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <TextBlock Text="Now Playing" FontSize="11" Foreground="#CCFFFFFF"/>
+                            <TextBlock Text="{Binding CurrentMedia.Title}" FontSize="14" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding CurrentMedia.FilePath}" FontSize="11" Foreground="#99FFFFFF" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid x:Name="PlaylistDataGrid" Grid.Row="2"
                               ItemsSource="{Binding Playlist}"
-                              SelectedItem="{Binding SelectedMediaItem}"
+                              SelectedItem="{Binding SelectedMediaItem, Mode=TwoWay}"
                               AutoGenerateColumns="False"
                               Background="{DynamicResource SecondaryBrush}"
                               Foreground="{DynamicResource TextBrush}"
@@ -211,6 +211,17 @@
                               AllowDrop="True"
                               Drop="PlaylistDataGrid_Drop"
                               DragOver="PlaylistDataGrid_DragOver">
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
                             <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="80"/>
@@ -218,7 +229,7 @@
                         </DataGrid.Columns>
                     </DataGrid>
 
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
                         <Button Style="{StaticResource ButtonStyle}" Content="Add Files"
                                 Command="{Binding AddFilesCommand}" Margin="0,0,4,0"/>
                         <Button Style="{StaticResource ButtonStyle}" Content="Remove"
@@ -280,6 +291,7 @@
                               UnloadedBehavior="Stop"
                               MediaOpened="MediaPlayer_MediaOpened"
                               MediaEnded="MediaPlayer_MediaEnded"
+                              MediaFailed="MediaPlayer_MediaFailed"
                               Stretch="None"
                               Visibility="Collapsed"/>
 

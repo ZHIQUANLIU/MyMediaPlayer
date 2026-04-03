@@ -254,6 +254,8 @@ namespace MyMediaPlayer.ViewModels
         private void LoadPlaylist()
         {
             Playlist.Clear();
+            SelectedMediaItem = null;
+            CurrentMedia = null;
             if (SelectedCollection?.Playlist != null)
             {
                 foreach (var item in SelectedCollection.Playlist.Items)
@@ -297,8 +299,8 @@ namespace MyMediaPlayer.ViewModels
         private bool CanPlay() => SelectedMediaItem != null || CurrentMedia != null;
         private bool CanPause() => IsPlaying;
         private bool CanStop() => MediaElement != null && (IsPlaying || CurrentPosition > TimeSpan.Zero);
-        private bool CanPlayPrevious() => Playlist.Count > 0 && CurrentMedia != null;
-        private bool CanPlayNext() => Playlist.Count > 0 && CurrentMedia != null;
+        private bool CanPlayPrevious() => Playlist.Count > 0;
+        private bool CanPlayNext() => Playlist.Count > 0;
 
         public void Play()
         {
@@ -320,16 +322,26 @@ namespace MyMediaPlayer.ViewModels
         {
             if (MediaElement == null) return;
 
+            foreach (var m in Playlist)
+                m.IsPlaying = false;
+
             CurrentMedia = item;
-            MediaElement.Source = new Uri(item.FilePath);
+            item.IsPlaying = true;
+            SelectedMediaItem = item;
+            
+            try
+            {
+                var uri = new Uri(item.FilePath);
+                MediaElement.Source = uri;
+            }
+            catch
+            {
+                var uri = new Uri("file:///" + item.FilePath.Replace("\\", "/").Replace(" ", "%20"));
+                MediaElement.Source = uri;
+            }
             MediaElement.Volume = Volume;
             MediaElement.Play();
             IsPlaying = true;
-
-            if (_playbackData.MediaPositions.TryGetValue(item.FilePath, out var position))
-            {
-                MediaElement.Position = TimeSpan.FromSeconds(position);
-            }
 
             _positionSyncTimer.Start();
             _uiUpdateTimer.Start();
@@ -355,6 +367,8 @@ namespace MyMediaPlayer.ViewModels
             {
                 MediaElement.Stop();
                 IsPlaying = false;
+                if (CurrentMedia != null)
+                    CurrentMedia.IsPlaying = false;
                 CurrentPosition = TimeSpan.Zero;
                 _positionSyncTimer.Stop();
                 _uiUpdateTimer.Stop();
@@ -374,22 +388,46 @@ namespace MyMediaPlayer.ViewModels
 
         public void PlayPrevious()
         {
-            if (CurrentMedia == null || Playlist.Count == 0) return;
-            var index = Playlist.IndexOf(CurrentMedia);
-            if (index > 0)
-                LoadMedia(Playlist[index - 1]);
+            if (Playlist.Count == 0) return;
+            
+            int targetIndex;
+            if (CurrentMedia != null)
+            {
+                var index = Playlist.IndexOf(CurrentMedia);
+                targetIndex = index > 0 ? index - 1 : Playlist.Count - 1;
+            }
+            else if (SelectedMediaItem != null)
+            {
+                var index = Playlist.IndexOf(SelectedMediaItem);
+                targetIndex = index > 0 ? index - 1 : Playlist.Count - 1;
+            }
             else
-                LoadMedia(Playlist[^1]);
+            {
+                targetIndex = 0;
+            }
+            LoadMedia(Playlist[targetIndex]);
         }
 
         public void PlayNext()
         {
-            if (CurrentMedia == null || Playlist.Count == 0) return;
-            var index = Playlist.IndexOf(CurrentMedia);
-            if (index < Playlist.Count - 1)
-                LoadMedia(Playlist[index + 1]);
-            else if (Playlist.Count > 0)
-                LoadMedia(Playlist[0]);
+            if (Playlist.Count == 0) return;
+            
+            int targetIndex;
+            if (CurrentMedia != null)
+            {
+                var index = Playlist.IndexOf(CurrentMedia);
+                targetIndex = index < Playlist.Count - 1 ? index + 1 : 0;
+            }
+            else if (SelectedMediaItem != null)
+            {
+                var index = Playlist.IndexOf(SelectedMediaItem);
+                targetIndex = index < Playlist.Count - 1 ? index + 1 : 0;
+            }
+            else
+            {
+                targetIndex = 0;
+            }
+            LoadMedia(Playlist[targetIndex]);
         }
 
         public void OnMediaEnded()
@@ -418,7 +456,18 @@ namespace MyMediaPlayer.ViewModels
 
             if (dialog.ShowDialog() == true)
             {
-                foreach (var file in dialog.FileNames)
+                AddFilesToPlaylist(dialog.FileNames);
+            }
+        }
+
+        public void AddFilesToPlaylist(string[] files)
+        {
+            var validExtensions = new[] { ".mp3", ".mp4", ".avi", ".wmv", ".wav", ".m4a" };
+            var addedCount = 0;
+            foreach (var file in files)
+            {
+                var ext = System.IO.Path.GetExtension(file).ToLower();
+                if (validExtensions.Contains(ext))
                 {
                     var item = new MediaItem
                     {
@@ -426,9 +475,13 @@ namespace MyMediaPlayer.ViewModels
                         FilePath = file
                     };
                     Playlist.Add(item);
+                    addedCount++;
                 }
+            }
+            if (addedCount > 0)
+            {
                 SavePlaylist();
-                LoggingService.Instance.LogInfo($"Added {dialog.FileNames.Length} files to playlist");
+                LoggingService.Instance.LogInfo($"Added {addedCount} files to playlist");
             }
         }
 
@@ -508,9 +561,17 @@ namespace MyMediaPlayer.ViewModels
         private void SortByTitle()
         {
             var sorted = Playlist.OrderBy(x => x.Title).ToList();
+            var current = CurrentMedia;
+            var selected = SelectedMediaItem;
             Playlist.Clear();
             foreach (var item in sorted)
                 Playlist.Add(item);
+            
+            if (current != null)
+                CurrentMedia = Playlist.FirstOrDefault(x => x.Id == current.Id);
+            if (selected != null)
+                SelectedMediaItem = Playlist.FirstOrDefault(x => x.Id == selected.Id);
+            
             SavePlaylist();
             LoggingService.Instance.LogInfo("Sorted playlist by title");
         }
@@ -518,9 +579,17 @@ namespace MyMediaPlayer.ViewModels
         private void SortByDuration()
         {
             var sorted = Playlist.OrderBy(x => x.Duration).ToList();
+            var current = CurrentMedia;
+            var selected = SelectedMediaItem;
             Playlist.Clear();
             foreach (var item in sorted)
                 Playlist.Add(item);
+            
+            if (current != null)
+                CurrentMedia = Playlist.FirstOrDefault(x => x.Id == current.Id);
+            if (selected != null)
+                SelectedMediaItem = Playlist.FirstOrDefault(x => x.Id == selected.Id);
+            
             SavePlaylist();
             LoggingService.Instance.LogInfo("Sorted playlist by duration");
         }
@@ -528,9 +597,17 @@ namespace MyMediaPlayer.ViewModels
         private void SortByDate()
         {
             var sorted = Playlist.OrderBy(x => x.DateAdded).ToList();
+            var current = CurrentMedia;
+            var selected = SelectedMediaItem;
             Playlist.Clear();
             foreach (var item in sorted)
                 Playlist.Add(item);
+            
+            if (current != null)
+                CurrentMedia = Playlist.FirstOrDefault(x => x.Id == current.Id);
+            if (selected != null)
+                SelectedMediaItem = Playlist.FirstOrDefault(x => x.Id == selected.Id);
+            
             SavePlaylist();
             LoggingService.Instance.LogInfo("Sorted playlist by date");
         }

@@ -60,6 +60,20 @@ public partial class MainWindow : Window
                 CurrentTimeText.Text = _viewModel.CurrentPositionText;
                 TotalTimeText.Text = _viewModel.TotalDurationText;
             }
+
+            if (_viewModel.CurrentMedia != null)
+            {
+                PlaylistDataGrid.SelectedItem = _viewModel.CurrentMedia;
+                PlaylistDataGrid.CurrentItem = _viewModel.CurrentMedia;
+                PlaylistDataGrid.ScrollIntoView(_viewModel.CurrentMedia);
+                
+                var row = PlaylistDataGrid.ItemContainerGenerator.ContainerFromItem(_viewModel.CurrentMedia) as DataGridRow;
+                if (row != null)
+                {
+                    row.IsSelected = true;
+                    row.Focus();
+                }
+            }
         }
     }
 
@@ -78,6 +92,12 @@ public partial class MainWindow : Window
     {
         _positionTimer.Stop();
         _viewModel.OnMediaEnded();
+    }
+
+    private void MediaPlayer_MediaFailed(object sender, System.Windows.ExceptionRoutedEventArgs e)
+    {
+        var ex = e.ErrorException;
+        LoggingService.Instance.LogError($"Media playback failed: {ex.Message}", ex);
     }
 
     private void PlayPause_Click(object sender, RoutedEventArgs e)
@@ -194,13 +214,32 @@ public partial class MainWindow : Window
 
     private void PlaylistDataGrid_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = DragDropEffects.Move;
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Effects = DragDropEffects.Copy;
+        }
+        else if (e.Data.GetDataPresent(typeof(MediaItem)))
+        {
+            e.Effects = DragDropEffects.Move;
+        }
+        else
+        {
+            e.Effects = DragDropEffects.None;
+        }
         e.Handled = true;
     }
 
     private void PlaylistDataGrid_Drop(object sender, DragEventArgs e)
     {
-        if (e.Data.GetDataPresent(typeof(MediaItem)))
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            if (files != null)
+            {
+                _viewModel.AddFilesToPlaylist(files);
+            }
+        }
+        else if (e.Data.GetDataPresent(typeof(MediaItem)))
         {
             var item = e.Data.GetData(typeof(MediaItem)) as MediaItem;
             if (item != null)

@@ -13,6 +13,9 @@ namespace MyMediaPlayer.Models
         public DateTime DateAdded { get; set; } = DateTime.Now;
 
         [JsonIgnore]
+        public bool IsPlaying { get; set; }
+
+        [JsonIgnore]
         public string DurationText => Duration.TotalHours >= 1 
             ? Duration.ToString(@"hh\:mm\:ss") 
             : Duration.ToString(@"mm\:ss");
