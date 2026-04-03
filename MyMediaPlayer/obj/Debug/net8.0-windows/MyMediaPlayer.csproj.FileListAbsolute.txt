@@ -22,3 +22,4 @@ C:\OpenCode\MyMediaPlayer\MyMediaPlayer\obj\Debug\net8.0-windows\refint\MyMediaP
 C:\OpenCode\MyMediaPlayer\MyMediaPlayer\obj\Debug\net8.0-windows\MyMediaPlayer.pdb
 C:\OpenCode\MyMediaPlayer\MyMediaPlayer\obj\Debug\net8.0-windows\MyMediaPlayer.genruntimeconfig.cache
 C:\OpenCode\MyMediaPlayer\MyMediaPlayer\obj\Debug\net8.0-windows\ref\MyMediaPlayer.dll
+C:\OpenCode\MyMediaPlayer\MyMediaPlayer\obj\Debug\net8.0-windows\MyMediaPlayer.sourcelink.json
