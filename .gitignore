@@ -1,0 +1,25 @@
+# .NET
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+
+# Publish output
+publish/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Logs
+logs/
+
+# Data (optional - uncomment if you want to ignore user data)
+# data/
+
+# OS
+Thumbs.db
+.DS_Store
