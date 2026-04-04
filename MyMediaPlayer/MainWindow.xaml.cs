@@ -1,12 +1,17 @@
 using System;
+using System.Diagnostics;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using LibVLCSharp.WPF;
+using LibVLCSharp.Shared;
 using MyMediaPlayer.Models;
 using MyMediaPlayer.Services;
 using MyMediaPlayer.ViewModels;
+using MediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 
 namespace MyMediaPlayer;
 
@@ -16,10 +21,37 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _positionTimer;
     private bool _isDraggingSlider = false;
     private bool _isInitialized = false;
+    private LibVLC? _libVLC;
+    private MediaPlayer? _mediaPlayer;
 
     public MainWindow()
     {
         InitializeComponent();
+        
+        try
+        {
+            LoggingService.Instance.LogInfo("Initializing LibVLC...");
+            Core.Initialize();
+            LoggingService.Instance.LogInfo("Core initialized");
+            
+            _libVLC = new LibVLC();
+            LoggingService.Instance.LogInfo($"LibVLC version: {_libVLC.Version}");
+            
+            _mediaPlayer = new MediaPlayer(_libVLC);
+            LoggingService.Instance.LogInfo("MediaPlayer created");
+
+            _mediaPlayer.EndReached += MediaPlayer_EndReached;
+            _mediaPlayer.Playing += MediaPlayer_Playing;
+            LoggingService.Instance.LogInfo("MediaPlayer event handlers attached");
+            
+            // Handle the Stopped event to know when it's safe to dispose
+            _mediaPlayer.Stopped += MediaPlayer_Stopped;
+        }
+        catch (Exception ex)
+        {
+            LoggingService.Instance.LogError("Failed to initialize media components", ex);
+        }
+
         _positionTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(250)
@@ -27,16 +59,58 @@ public partial class MainWindow : Window
         _positionTimer.Tick += PositionTimer_Tick;
     }
 
+    private bool _isClosing = false; // Guard flag to prevent events during shutdown
+
+    private void MediaPlayer_Playing(object? sender, EventArgs e)
+    {
+        if (_isClosing) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_isClosing || _mediaPlayer == null) return;
+            if (_mediaPlayer.Length > 0)
+            {
+                _viewModel.TotalDuration = TimeSpan.FromMilliseconds(_mediaPlayer.Length);
+                TotalTimeText.Text = _viewModel.TotalDurationText;
+                ProgressSlider.Value = 0;
+                _positionTimer.Start();
+            }
+        });
+    }
+
+    private void MediaPlayer_EndReached(object? sender, EventArgs e)
+    {
+        if (_isClosing) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_isClosing) return;
+            _positionTimer.Stop();
+            _viewModel.OnMediaEnded();
+        });
+    }
+
+    private void MediaPlayer_Stopped(object? sender, EventArgs e)
+    {
+        // No-op during normal operation; used to signal shutdown is safe
+    }
+
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         _viewModel = new MainViewModel
         {
-            MediaElement = MediaPlayer
+            MediaPlayer = _mediaPlayer,
+            LibVLC = _libVLC
         };
         DataContext = _viewModel;
         
+        // Attach MediaPlayer to the embedded VideoView.
+        // This tells VLC to render into our WPF control instead of
+        // creating a separate floating Direct3D window.
+        if (_mediaPlayer != null)
+            VideoView.MediaPlayer = _mediaPlayer;
+        
         VolumeSlider.Value = _viewModel.Volume;
-        MediaPlayer.Volume = _viewModel.Volume;
+        if (_mediaPlayer != null)
+            _mediaPlayer.Volume = (int)(_viewModel.Volume * 100);
         
         ApplyTheme(_viewModel.IsDarkTheme);
         _isInitialized = true;
@@ -44,19 +118,78 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
-        _viewModel?.OnClosing();
+        LoggingService.Instance.LogInfo("Window closing starting...");
+        
+        // Set flag FIRST so all VLC event callbacks become no-ops immediately.
+        // This breaks the potential deadlock: VLC Stop() fires events on VLC threads,
+        // those events used Dispatcher.Invoke() which would wait for the UI thread,
+        // but the UI thread is blocked here waiting for Stop() → deadlock.
+        _isClosing = true;
+        
+        // Stop the position timer immediately
+        try { _positionTimer.Stop(); } catch { }
+        
+        // Save state while still on UI thread
+        try { _viewModel?.OnClosing(); } catch { }
+        
+        // CRITICAL: Detach MediaPlayer from VideoView FIRST.
+        // This releases VLC's Direct3D surface and Win32 HWND handle,
+        // which is what was preventing the window from closing.
+        try { VideoView.MediaPlayer = null; } catch { }
+        
+        // Detach VLC event handlers BEFORE calling Stop().
+        // This ensures no VLC thread can try to Dispatcher.Invoke back onto the UI thread.
+        var playerToDispose = _mediaPlayer;
+        var libVlcToDispose = _libVLC;
+        _mediaPlayer = null;
+        _libVLC = null;
+        
+        if (playerToDispose != null)
+        {
+            try
+            {
+                playerToDispose.EndReached -= MediaPlayer_EndReached;
+                playerToDispose.Playing -= MediaPlayer_Playing;
+                playerToDispose.Stopped -= MediaPlayer_Stopped;
+            }
+            catch { }
+        }
+        
+        // Shut down the WPF application (closes the window, ends the message loop)
+        // Then do the heavy-weight VLC cleanup on a background thread so we don't freeze
+        Application.Current.Shutdown();
+        
+        System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                playerToDispose?.Stop();
+                playerToDispose?.Dispose();
+            }
+            catch { }
+            
+            try
+            {
+                libVlcToDispose?.Dispose();
+            }
+            catch { }
+            
+            // Force-exit to ensure no background VLC threads keep the process alive
+            System.Threading.Thread.Sleep(200);
+            Environment.Exit(0);
+        });
     }
 
     private void PositionTimer_Tick(object? sender, EventArgs e)
     {
-        if (_viewModel != null && MediaPlayer.NaturalDuration.HasTimeSpan && !_isDraggingSlider)
+        if (_viewModel != null && _mediaPlayer != null && _mediaPlayer.Length > 0 && !_isDraggingSlider)
         {
-            var total = MediaPlayer.NaturalDuration.TimeSpan.TotalSeconds;
+            var total = _mediaPlayer.Length;
             if (total > 0)
             {
-                ProgressSlider.Value = MediaPlayer.Position.TotalSeconds / total;
-                _viewModel.CurrentPosition = MediaPlayer.Position;
-                _viewModel.TotalDuration = MediaPlayer.NaturalDuration.TimeSpan;
+                ProgressSlider.Value = (double)_mediaPlayer.Time / total;
+                _viewModel.CurrentPosition = TimeSpan.FromMilliseconds(_mediaPlayer.Time);
+                _viewModel.TotalDuration = TimeSpan.FromMilliseconds(total);
                 CurrentTimeText.Text = _viewModel.CurrentPositionText;
                 TotalTimeText.Text = _viewModel.TotalDurationText;
             }
@@ -77,27 +210,21 @@ public partial class MainWindow : Window
         }
     }
 
-    private void MediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
+    private void VideoPlayer_MediaStarted(object? sender, EventArgs e)
     {
-        if (MediaPlayer.NaturalDuration.HasTimeSpan)
+        if (_mediaPlayer != null && _mediaPlayer.Length > 0)
         {
-            _viewModel.TotalDuration = MediaPlayer.NaturalDuration.TimeSpan;
+            _viewModel.TotalDuration = TimeSpan.FromMilliseconds(_mediaPlayer.Length);
             TotalTimeText.Text = _viewModel.TotalDurationText;
             ProgressSlider.Value = 0;
             _positionTimer.Start();
         }
     }
 
-    private void MediaPlayer_MediaEnded(object sender, RoutedEventArgs e)
+    private void VideoPlayer_MediaEnded(object? sender, EventArgs e)
     {
         _positionTimer.Stop();
         _viewModel.OnMediaEnded();
-    }
-
-    private void MediaPlayer_MediaFailed(object sender, System.Windows.ExceptionRoutedEventArgs e)
-    {
-        var ex = e.ErrorException;
-        LoggingService.Instance.LogError($"Media playback failed: {ex.Message}", ex);
     }
 
     private void PlayPause_Click(object sender, RoutedEventArgs e)
@@ -130,10 +257,10 @@ public partial class MainWindow : Window
 
     private void ProgressSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (_isDraggingSlider && MediaPlayer.NaturalDuration.HasTimeSpan)
+        if (_isDraggingSlider && _mediaPlayer != null && _mediaPlayer.Length > 0)
         {
-            var total = MediaPlayer.NaturalDuration.TimeSpan;
-            var position = TimeSpan.FromSeconds(e.NewValue * total.TotalSeconds);
+            var total = _mediaPlayer.Length;
+            var position = TimeSpan.FromMilliseconds(e.NewValue * total);
             CurrentTimeText.Text = position.TotalHours >= 1 
                 ? position.ToString(@"hh\:mm\:ss") 
                 : position.ToString(@"mm\:ss");
@@ -145,7 +272,8 @@ public partial class MainWindow : Window
         if (_viewModel != null)
         {
             _viewModel.Volume = e.NewValue;
-            MediaPlayer.Volume = e.NewValue;
+            if (_mediaPlayer != null)
+                _mediaPlayer.Volume = (int)(e.NewValue * 100);
         }
     }
 

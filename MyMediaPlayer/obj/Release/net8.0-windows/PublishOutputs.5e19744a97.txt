@@ -1,6 +1,0 @@
-C:\OpenCode\MyMediaPlayer\publish\MyMediaPlayer.exe
-C:\OpenCode\MyMediaPlayer\publish\MyMediaPlayer.dll
-C:\OpenCode\MyMediaPlayer\publish\MyMediaPlayer.deps.json
-C:\OpenCode\MyMediaPlayer\publish\MyMediaPlayer.runtimeconfig.json
-C:\OpenCode\MyMediaPlayer\publish\MyMediaPlayer.pdb
-C:\OpenCode\MyMediaPlayer\publish\Newtonsoft.Json.dll

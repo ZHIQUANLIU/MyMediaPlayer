@@ -14,7 +14,7 @@ namespace MyMediaPlayer.Services
         private readonly string _logFolder;
         private readonly string _logFile;
         private readonly object _lock = new();
-        private readonly int _maxLogSize = 5 * 1024 * 1024;
+        private readonly int _maxLogSize = 50 * 1024 * 1024;
 
         public List<LogEntry> LogEntries { get; private set; } = new();
 
@@ -79,7 +79,15 @@ namespace MyMediaPlayer.Services
 
         public void LogError(string message, Exception? ex = null)
         {
-            var fullMessage = ex != null ? $"{message}: {ex.Message}" : message;
+            var fullMessage = message;
+            if (ex != null)
+            {
+                fullMessage = $"{message}\nException: {ex.GetType().Name}\nMessage: {ex.Message}\nStackTrace: {ex.StackTrace}";
+                if (ex.InnerException != null)
+                {
+                    fullMessage += $"\nInnerException: {ex.InnerException.Message}\nInnerStackTrace: {ex.InnerException.StackTrace}";
+                }
+            }
             AddLogEntry(LogLevel.Error, fullMessage);
         }
 

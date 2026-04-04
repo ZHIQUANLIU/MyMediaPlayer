@@ -3,6 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:MyMediaPlayer"
+        xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
         mc:Ignorable="d"
         Title="My Media Player" Height="600" Width="1000"
         MinHeight="450" MinWidth="700"
@@ -12,6 +14,8 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- Inverse: hides when value is non-null (used for the "No media" placeholder) -->
+        <local:NullToVisibilityConverter x:Key="InverseBoolToVis" Invert="True"/>
         
         <Style x:Key="PanelStyle" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource SecondaryBrush}"/>
@@ -51,13 +55,13 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Width" Value="36"/>
-            <Setter Property="Height" Value="36"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="18">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="16">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </ControlTemplate>
@@ -177,16 +181,40 @@
             <Border Grid.Column="1" Style="{StaticResource PanelStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="220" MinHeight="80"/>
+                        <RowDefinition Height="5"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*" MinHeight="80"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Text="Playlist" FontSize="14" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextBrush}"/>
+                    <!-- ═══ VIDEO OUTPUT ═══ -->
+                    <Border Grid.Row="0" Background="#0D0D0D" CornerRadius="4" ClipToBounds="True">
+                        <Grid>
+                            <!-- VideoView: VLC renders here — no more floating window -->
+                            <vlc:VideoView x:Name="VideoView" Background="Black"/>
+                            <!-- Placeholder shown when nothing is playing -->
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                        Visibility="{Binding CurrentMedia, Converter={StaticResource InverseBoolToVis}}">
+                                <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="48"
+                                           Foreground="#333333" HorizontalAlignment="Center"/>
+                                <TextBlock Text="No media playing" FontSize="13" Foreground="#555555"
+                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
 
-                    <Border Grid.Row="1" Background="{DynamicResource PrimaryBrush}" CornerRadius="4" Padding="12,8" Margin="0,8,0,8"
+                    <!-- Drag handle -->
+                    <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" Height="5"
+                                  Background="{DynamicResource BorderBrush}" Cursor="SizeNS"/>
+
+                    <!-- Now Playing banner -->
+                    <TextBlock Grid.Row="2" Text="Playlist" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0"/>
+
+                    <!-- Now Playing banner -->
+                    <Border Grid.Row="3" Background="{DynamicResource PrimaryBrush}" CornerRadius="4" Padding="12,8" Margin="0,8,0,8"
                             Visibility="{Binding CurrentMedia, Converter={StaticResource BoolToVis}}">
                         <StackPanel>
                             <TextBlock Text="Now Playing" FontSize="11" Foreground="#CCFFFFFF"/>
@@ -195,7 +223,7 @@
                         </StackPanel>
                     </Border>
 
-                    <DataGrid x:Name="PlaylistDataGrid" Grid.Row="2"
+                    <DataGrid x:Name="PlaylistDataGrid" Grid.Row="4"
                               ItemsSource="{Binding Playlist}"
                               SelectedItem="{Binding SelectedMediaItem, Mode=TwoWay}"
                               AutoGenerateColumns="False"
@@ -229,7 +257,7 @@
                         </DataGrid.Columns>
                     </DataGrid>
 
-                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
+                    <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,8,0,0">
                         <Button Style="{StaticResource ButtonStyle}" Content="Add Files"
                                 Command="{Binding AddFilesCommand}" Margin="0,0,4,0"/>
                         <Button Style="{StaticResource ButtonStyle}" Content="Remove"
@@ -279,49 +307,39 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="2" Background="{DynamicResource SecondaryBrush}" Padding="12">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+        <Border Grid.Row="2" Background="{DynamicResource SecondaryBrush}" Padding="12,8">
+            <StackPanel>
+                <Border Background="#1A1A1A" CornerRadius="4" Padding="8" Margin="0,0,0,8"
+                        Visibility="{Binding CurrentMedia, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding CurrentMedia.Title}" FontSize="14" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding CurrentMedia.FilePath}" FontSize="10" Foreground="#999999" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Border>
 
-                <MediaElement x:Name="MediaPlayer" 
-                              LoadedBehavior="Manual"
-                              UnloadedBehavior="Stop"
-                              MediaOpened="MediaPlayer_MediaOpened"
-                              MediaEnded="MediaPlayer_MediaEnded"
-                              MediaFailed="MediaPlayer_MediaFailed"
-                              Stretch="None"
-                              Visibility="Collapsed"/>
-
-                <Grid Grid.Row="0" Margin="0,0,0,8">
+                <Grid Margin="0,0,0,6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     
-                    <Slider x:Name="ProgressSlider" 
+                    <Slider x:Name="ProgressSlider" Height="20"
                             Minimum="0" Maximum="1" 
                             Value="0"
                             PreviewMouseDown="ProgressSlider_PreviewMouseDown"
                             PreviewMouseUp="ProgressSlider_PreviewMouseUp"
-                            ValueChanged="ProgressSlider_ValueChanged"
-                            VerticalAlignment="Center"/>
+                            ValueChanged="ProgressSlider_ValueChanged"/>
                     
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
-                        <TextBlock x:Name="CurrentTimeText" Text="00:00"
-                                   Foreground="{DynamicResource TextBrush}" 
-                                   VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <TextBlock Text="/" Foreground="{DynamicResource TextBrush}" 
-                                   VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <TextBlock x:Name="TotalTimeText" Text="00:00"
-                                   Foreground="{DynamicResource TextBrush}" 
-                                   VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="CurrentTimeText" Text="00:00" FontSize="11"
+                                   Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock Text=" / " FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock x:Name="TotalTimeText" Text="00:00" FontSize="11"
+                                   Foreground="{DynamicResource TextBrush}"/>
                     </StackPanel>
                 </Grid>
 
-                <Grid Grid.Row="1">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
@@ -329,34 +347,32 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Orientation="Horizontal">
-                        <Button Style="{StaticResource IconButtonStyle}" Command="{Binding PreviousCommand}"
-                                ToolTip="Previous">
-                            <TextBlock Text="&#xE892;" FontFamily="Segoe MDL2 Assets" FontSize="18"/>
+                        <Button Style="{StaticResource IconButtonStyle}" Command="{Binding PreviousCommand}" ToolTip="Previous">
+                            <TextBlock Text="&#xE892;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
                         </Button>
-                        <Button Style="{StaticResource IconButtonStyle}" x:Name="PlayButton"
-                                Click="PlayPause_Click" ToolTip="Play/Pause">
-                            <TextBlock x:Name="PlayPauseIcon" Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="24"/>
+                        <Button Style="{StaticResource IconButtonStyle}" x:Name="PlayButton" Click="PlayPause_Click" ToolTip="Play/Pause">
+                            <TextBlock x:Name="PlayPauseIcon" Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="18"/>
                         </Button>
-                        <Button Style="{StaticResource IconButtonStyle}" Command="{Binding StopCommand}"
-                                ToolTip="Stop">
-                            <TextBlock Text="&#xE71A;" FontFamily="Segoe MDL2 Assets" FontSize="18"/>
+                        <Button Style="{StaticResource IconButtonStyle}" Command="{Binding StopCommand}" ToolTip="Stop">
+                            <TextBlock Text="&#xE71A;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
                         </Button>
-                        <Button Style="{StaticResource IconButtonStyle}" Command="{Binding NextCommand}"
-                                ToolTip="Next">
-                            <TextBlock Text="&#xE893;" FontFamily="Segoe MDL2 Assets" FontSize="18"/>
+                        <Button Style="{StaticResource IconButtonStyle}" Command="{Binding NextCommand}" ToolTip="Next">
+                            <TextBlock Text="&#xE893;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
                         </Button>
                     </StackPanel>
 
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding CurrentMedia.Title}" FontSize="12"
+                                   Foreground="{DynamicResource TextBrush}" 
+                                   Visibility="{Binding CurrentMedia, Converter={StaticResource BoolToVis}}" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
+                    </StackPanel>
+
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="&#xE767;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
-                        <Slider x:Name="VolumeSlider" 
-                                Width="100" Minimum="0" Maximum="1" Value="0.5"
-                                ValueChanged="VolumeSlider_ValueChanged"
-                                VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        <TextBlock Text="&#xE767;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
+                        <Slider x:Name="VolumeSlider" Width="80" Minimum="0" Maximum="1" Value="0.5" ValueChanged="VolumeSlider_ValueChanged" Margin="4,0,0,0"/>
                     </StackPanel>
                 </Grid>
-            </Grid>
+            </StackPanel>
         </Border>
     </Grid>
 </Window>

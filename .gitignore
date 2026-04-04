@@ -1,4 +1,6 @@
 # .NET
+MyMediaPlayer/bin/
+MyMediaPlayer/obj/
 bin/
 obj/
 *.dll
@@ -23,3 +25,5 @@ logs/
 # OS
 Thumbs.db
 .DS_Store
+/MyMediaPlayer/obj
+/MyMediaPlayer/bin
