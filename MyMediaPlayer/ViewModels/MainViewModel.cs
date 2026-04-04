@@ -2,12 +2,12 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
-using System.Media;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using LibVLCSharp.Shared;
 using MyMediaPlayer.Models;
 using MyMediaPlayer.Services;
 
@@ -55,7 +55,8 @@ namespace MyMediaPlayer.ViewModels
             }
         }
 
-        public System.Windows.Controls.MediaElement? MediaElement { get; set; }
+        public LibVLC? LibVLC { get; set; }
+        public MediaPlayer? MediaPlayer { get; set; }
 
         private bool _isPlaying;
         public bool IsPlaying
@@ -100,9 +101,9 @@ namespace MyMediaPlayer.ViewModels
             {
                 _volume = value;
                 OnPropertyChanged();
-                if (MediaElement != null)
+                if (MediaPlayer != null)
                 {
-                    MediaElement.Volume = value;
+                    MediaPlayer.Volume = (int)(value * 100);
                 }
             }
         }
@@ -166,27 +167,10 @@ namespace MyMediaPlayer.ViewModels
         public MainViewModel()
         {
             _dataService = new DataService();
-            _playbackData = new PlaybackData();
-            _settings = new AppSettings();
-
-            PlayCommand = new RelayCommand(_ => Play(), _ => CanPlay());
-            PauseCommand = new RelayCommand(_ => Pause(), _ => CanPause());
-            StopCommand = new RelayCommand(_ => Stop(), _ => CanStop());
-            PreviousCommand = new RelayCommand(_ => PlayPrevious(), _ => CanPlayPrevious());
-            NextCommand = new RelayCommand(_ => PlayNext(), _ => CanPlayNext());
-            AddFilesCommand = new RelayCommand(_ => AddFiles());
-            RemoveItemCommand = new RelayCommand(_ => RemoveItem(), _ => SelectedMediaItem != null);
-            ClearPlaylistCommand = new RelayCommand(_ => ClearPlaylist(), _ => Playlist.Any());
-            AddCollectionCommand = new RelayCommand(_ => AddCollection());
-            DeleteCollectionCommand = new RelayCommand(_ => DeleteCollection(), _ => SelectedCollection != null);
-            RenameCollectionCommand = new RelayCommand(_ => RenameCollection(), _ => SelectedCollection != null);
-            SortByTitleCommand = new RelayCommand(_ => SortByTitle());
-            SortByDurationCommand = new RelayCommand(_ => SortByDuration());
-            SortByDateCommand = new RelayCommand(_ => SortByDate());
-            ToggleThemeCommand = new RelayCommand(_ => ToggleTheme());
-            ToggleLogPanelCommand = new RelayCommand(_ => ToggleLogPanel());
-            ClearLogsCommand = new RelayCommand(_ => ClearLogs());
-
+            // Note: LibVLC and MediaPlayer are set by MainWindow after construction
+            // via the LibVLC and MediaPlayer properties. We do NOT create a second
+            // LibVLC instance here to avoid resource duplication.
+            
             _positionSyncTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(60)
@@ -279,9 +263,9 @@ namespace MyMediaPlayer.ViewModels
 
         private void SyncPosition()
         {
-            if (CurrentMedia != null && MediaElement != null && MediaElement.NaturalDuration.HasTimeSpan)
+            if (CurrentMedia != null && MediaPlayer != null && MediaPlayer.Length > 0)
             {
-                _playbackData.MediaPositions[CurrentMedia.FilePath] = MediaElement.Position.TotalSeconds;
+                _playbackData.MediaPositions[CurrentMedia.FilePath] = MediaPlayer.Time;
                 _dataService.SavePlaybackData(_playbackData);
                 LoggingService.Instance.LogInfo($"Position synced: {CurrentMedia.Title}");
             }
@@ -289,16 +273,16 @@ namespace MyMediaPlayer.ViewModels
 
         private void UpdatePositionFromMedia()
         {
-            if (MediaElement != null && MediaElement.NaturalDuration.HasTimeSpan && IsPlaying)
+            if (MediaPlayer != null && MediaPlayer.Length > 0 && IsPlaying)
             {
-                CurrentPosition = MediaElement.Position;
-                TotalDuration = MediaElement.NaturalDuration.TimeSpan;
+                CurrentPosition = TimeSpan.FromMilliseconds(MediaPlayer.Time);
+                TotalDuration = TimeSpan.FromMilliseconds(MediaPlayer.Length);
             }
         }
 
         private bool CanPlay() => SelectedMediaItem != null || CurrentMedia != null;
         private bool CanPause() => IsPlaying;
-        private bool CanStop() => MediaElement != null && (IsPlaying || CurrentPosition > TimeSpan.Zero);
+        private bool CanStop() => MediaPlayer != null && (IsPlaying || CurrentPosition > TimeSpan.Zero);
         private bool CanPlayPrevious() => Playlist.Count > 0;
         private bool CanPlayNext() => Playlist.Count > 0;
 
@@ -310,7 +294,7 @@ namespace MyMediaPlayer.ViewModels
             }
             else if (CurrentMedia != null && !IsPlaying)
             {
-                MediaElement?.Play();
+                MediaPlayer?.Play();
                 IsPlaying = true;
                 _positionSyncTimer.Start();
                 _uiUpdateTimer.Start();
@@ -320,39 +304,43 @@ namespace MyMediaPlayer.ViewModels
 
         private void LoadMedia(MediaItem item)
         {
-            if (MediaElement == null) return;
+            if (MediaPlayer == null || LibVLC == null) return;
 
-            foreach (var m in Playlist)
-                m.IsPlaying = false;
-
-            CurrentMedia = item;
-            item.IsPlaying = true;
-            SelectedMediaItem = item;
-            
             try
             {
-                var uri = new Uri(item.FilePath);
-                MediaElement.Source = uri;
-            }
-            catch
-            {
-                var uri = new Uri("file:///" + item.FilePath.Replace("\\", "/").Replace(" ", "%20"));
-                MediaElement.Source = uri;
-            }
-            MediaElement.Volume = Volume;
-            MediaElement.Play();
-            IsPlaying = true;
+                foreach (var m in Playlist)
+                    m.IsPlaying = false;
 
-            _positionSyncTimer.Start();
-            _uiUpdateTimer.Start();
-            LoggingService.Instance.LogInfo($"Loaded media: {item.Title}");
+                CurrentMedia = item;
+                item.IsPlaying = true;
+                SelectedMediaItem = item;
+                
+                MediaPlayer.Stop();
+                
+                using var media = new Media(LibVLC, item.FilePath, FromType.FromPath);
+                if (!MediaPlayer.Play(media))
+                {
+                    LoggingService.Instance.LogError($"Failed to play: {item.Title}");
+                    return;
+                }
+                MediaPlayer.Volume = (int)(Volume * 100);
+                IsPlaying = true;
+
+                _positionSyncTimer.Start();
+                _uiUpdateTimer.Start();
+                LoggingService.Instance.LogInfo($"Loaded media: {item.Title}");
+            }
+            catch (Exception ex)
+            {
+                LoggingService.Instance.LogError($"Error loading media: {ex.Message}", ex);
+            }
         }
 
         public void Pause()
         {
-            if (MediaElement != null && IsPlaying)
+            if (MediaPlayer != null && IsPlaying)
             {
-                MediaElement.Pause();
+                MediaPlayer.Pause();
                 IsPlaying = false;
                 _positionSyncTimer.Stop();
                 _uiUpdateTimer.Stop();
@@ -363,9 +351,9 @@ namespace MyMediaPlayer.ViewModels
 
         public void Stop()
         {
-            if (MediaElement != null)
+            if (MediaPlayer != null)
             {
-                MediaElement.Stop();
+                MediaPlayer.Stop();
                 IsPlaying = false;
                 if (CurrentMedia != null)
                     CurrentMedia.IsPlaying = false;
@@ -379,9 +367,9 @@ namespace MyMediaPlayer.ViewModels
 
         private void SaveCurrentPosition()
         {
-            if (CurrentMedia != null && MediaElement != null)
+            if (CurrentMedia != null && MediaPlayer != null && MediaPlayer.Length > 0)
             {
-                _playbackData.MediaPositions[CurrentMedia.FilePath] = MediaElement.Position.TotalSeconds;
+                _playbackData.MediaPositions[CurrentMedia.FilePath] = MediaPlayer.Time;
                 _dataService.SavePlaybackData(_playbackData);
             }
         }
@@ -438,11 +426,11 @@ namespace MyMediaPlayer.ViewModels
 
         public void Seek(double position)
         {
-            if (MediaElement != null && MediaElement.NaturalDuration.HasTimeSpan)
+            if (MediaPlayer != null && MediaPlayer.Length > 0)
             {
-                var newPosition = TimeSpan.FromSeconds(position * MediaElement.NaturalDuration.TimeSpan.TotalSeconds);
-                MediaElement.Position = newPosition;
-                CurrentPosition = newPosition;
+                var newTime = (long)(position * MediaPlayer.Length);
+                MediaPlayer.Time = newTime;
+                CurrentPosition = TimeSpan.FromMilliseconds(newTime);
             }
         }
 
@@ -451,7 +439,7 @@ namespace MyMediaPlayer.ViewModels
             var dialog = new OpenFileDialog
             {
                 Multiselect = true,
-                Filter = "Media Files|*.mp3;*.mp4;*.avi;*.wmv;*.wav;*.m4a|All Files|*.*"
+                Filter = "Media Files|*.mp3;*.mp4;*.avi;*.wmv;*.wav;*.m4a;*.mkv|All Files|*.*"
             };
 
             if (dialog.ShowDialog() == true)
@@ -462,7 +450,7 @@ namespace MyMediaPlayer.ViewModels
 
         public void AddFilesToPlaylist(string[] files)
         {
-            var validExtensions = new[] { ".mp3", ".mp4", ".avi", ".wmv", ".wav", ".m4a" };
+            var validExtensions = new[] { ".mp3", ".mp4", ".avi", ".wmv", ".wav", ".m4a", ".mkv" };
             var addedCount = 0;
             foreach (var file in files)
             {

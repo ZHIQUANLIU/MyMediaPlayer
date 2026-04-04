@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using LibVLCSharp.Shared;
 using MyMediaPlayer.Models;
 using Newtonsoft.Json;
 
@@ -13,6 +14,8 @@ namespace MyMediaPlayer.Services
         private readonly string _playbackFile;
         private readonly string _settingsFile;
 
+        public LibVLC? LibVLC { get; private set; }
+
         public DataService()
         {
             _dataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data");
@@ -20,6 +23,11 @@ namespace MyMediaPlayer.Services
             _collectionsFile = Path.Combine(_dataFolder, "collections.json");
             _playbackFile = Path.Combine(_dataFolder, "playback_data.json");
             _settingsFile = Path.Combine(_dataFolder, "settings.json");
+        }
+
+        public void InitializeLibVLC()
+        {
+            LibVLC = new LibVLC();
         }
 
         public List<Collection> LoadCollections()
