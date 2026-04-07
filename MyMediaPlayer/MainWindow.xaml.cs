@@ -39,6 +39,9 @@ public partial class MainWindow : Window
             
             _mediaPlayer = new MediaPlayer(_libVLC);
             LoggingService.Instance.LogInfo("MediaPlayer created");
+            
+            VideoPlayer.MediaPlayer = _mediaPlayer;
+            LoggingService.Instance.LogInfo("VideoView connected to MediaPlayer");
 
             _mediaPlayer.EndReached += MediaPlayer_EndReached;
             _mediaPlayer.Playing += MediaPlayer_Playing;
