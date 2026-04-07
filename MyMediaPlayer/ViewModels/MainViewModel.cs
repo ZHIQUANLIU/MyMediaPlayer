@@ -167,9 +167,24 @@ namespace MyMediaPlayer.ViewModels
         public MainViewModel()
         {
             _dataService = new DataService();
-            // Note: LibVLC and MediaPlayer are set by MainWindow after construction
-            // via the LibVLC and MediaPlayer properties. We do NOT create a second
-            // LibVLC instance here to avoid resource duplication.
+            
+            PlayCommand = new RelayCommand(_ => Play(), _ => CanPlay());
+            PauseCommand = new RelayCommand(_ => Pause(), _ => CanPause());
+            StopCommand = new RelayCommand(_ => Stop(), _ => CanStop());
+            PreviousCommand = new RelayCommand(_ => PlayPrevious(), _ => CanPlayPrevious());
+            NextCommand = new RelayCommand(_ => PlayNext(), _ => CanPlayNext());
+            AddFilesCommand = new RelayCommand(_ => AddFiles());
+            RemoveItemCommand = new RelayCommand(_ => RemoveItem(), _ => SelectedMediaItem != null);
+            ClearPlaylistCommand = new RelayCommand(_ => ClearPlaylist(), _ => Playlist.Any());
+            AddCollectionCommand = new RelayCommand(_ => AddCollection());
+            DeleteCollectionCommand = new RelayCommand(_ => DeleteCollection(), _ => SelectedCollection != null);
+            RenameCollectionCommand = new RelayCommand(_ => RenameCollection(), _ => SelectedCollection != null);
+            SortByTitleCommand = new RelayCommand(_ => SortByTitle());
+            SortByDurationCommand = new RelayCommand(_ => SortByDuration());
+            SortByDateCommand = new RelayCommand(_ => SortByDate());
+            ToggleThemeCommand = new RelayCommand(_ => ToggleTheme());
+            ToggleLogPanelCommand = new RelayCommand(_ => ToggleLogPanel());
+            ClearLogsCommand = new RelayCommand(_ => ClearLogs());
             
             _positionSyncTimer = new DispatcherTimer
             {
