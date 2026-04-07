@@ -309,7 +309,9 @@
 
         <Border Grid.Row="2" Background="{DynamicResource SecondaryBrush}" Padding="12,8">
             <StackPanel>
-                <Border Background="#1A1A1A" CornerRadius="4" Padding="8" Margin="0,0,0,8"
+                <vlc:VideoView x:Name="VideoPlayer" Height="0" Visibility="Visible"/>
+
+                <Border Background="#1A1A1A" CornerRadius="4" Padding="8" Margin="0,8,0,8"
                         Visibility="{Binding CurrentMedia, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="{Binding CurrentMedia.Title}" FontSize="14" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis"/>
