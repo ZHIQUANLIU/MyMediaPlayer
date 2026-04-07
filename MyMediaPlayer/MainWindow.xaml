@@ -10,7 +10,8 @@
         MinHeight="450" MinWidth="700"
         Background="{DynamicResource BackgroundBrush}"
         Loaded="Window_Loaded"
-        Closing="Window_Closing">
+        Closing="Window_Closing"
+        KeyDown="MainWindow_KeyDown">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
@@ -112,12 +113,20 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="MainGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
+        
+        <!-- Fullscreen video container -->
+        <Grid x:Name="FullscreenVideoContainer" Grid.RowSpan="3" Visibility="Collapsed" Background="Black"
+              MouseLeftButtonDown="FullscreenContainer_MouseLeftButtonDown">
+            <vlc:VideoView x:Name="FullscreenVideoView" Background="Black"/>
+            <TextBlock Text="Double-click or press ESC to exit" Foreground="Gray" 
+                       FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,30"/>
+        </Grid>
 
         <Border Grid.Row="0" Background="{DynamicResource PrimaryBrush}" Padding="12,8">
             <Grid>
@@ -130,6 +139,10 @@
                            Foreground="White" VerticalAlignment="Center"/>
                 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource IconButtonStyle}" Click="ToggleFullscreen_Click" 
+                            Foreground="White" ToolTip="Fullscreen (Double-click video)">
+                        <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
+                    </Button>
                     <Button Style="{StaticResource IconButtonStyle}" Click="ToggleTheme_Click" 
                             Foreground="White" ToolTip="Toggle Theme">
                         <TextBlock Text="&#xE706;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
@@ -142,7 +155,7 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="250"/>
                 <ColumnDefinition Width="*"/>
@@ -194,6 +207,37 @@
                         <Grid>
                             <!-- VideoView: VLC renders here — no more floating window -->
                             <vlc:VideoView x:Name="VideoView" Background="Black"/>
+                            <!-- Transparent overlay to capture mouse events -->
+                            <Border Background="#01000000" IsHitTestVisible="True" MouseLeftButtonDown="VideoOverlay_MouseLeftButtonDown">
+                                <Border.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Fullscreen" Click="ToggleFullscreen_Click"/>
+                                    </ContextMenu>
+                                </Border.ContextMenu>
+                            </Border>
+                            <!-- Fullscreen button overlay -->
+                            <Button x:Name="VideoFullscreenBtn" HorizontalAlignment="Right" VerticalAlignment="Top" 
+                                    Margin="8" Click="ToggleFullscreen_Click" Cursor="Hand" ToolTip="Fullscreen (Double-click)"
+                                    Background="Transparent" BorderThickness="0" Opacity="0.6">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="6">
+                                                        <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="White"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Opacity" Value="1"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                             <!-- Placeholder shown when nothing is playing -->
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                                         Visibility="{Binding CurrentMedia, Converter={StaticResource InverseBoolToVis}}">
@@ -309,9 +353,7 @@
 
         <Border Grid.Row="2" Background="{DynamicResource SecondaryBrush}" Padding="12,8">
             <StackPanel>
-                <vlc:VideoView x:Name="VideoPlayer" Height="0" Visibility="Visible"/>
-
-                <Border Background="#1A1A1A" CornerRadius="4" Padding="8" Margin="0,8,0,8"
+                <Border Background="#1A1A1A" CornerRadius="4" Padding="8" Margin="0,0,0,8"
                         Visibility="{Binding CurrentMedia, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="{Binding CurrentMedia.Title}" FontSize="14" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis"/>
