@@ -24,6 +24,11 @@ public partial class MainWindow : Window
     private LibVLC? _libVLC;
     private MediaPlayer? _mediaPlayer;
 
+    private WindowState _previousWindowState = WindowState.Normal;
+    private WindowStyle _previousWindowStyle;
+    private ResizeMode _previousResizeMode;
+    private bool _isFullscreen = false;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -40,7 +45,7 @@ public partial class MainWindow : Window
             _mediaPlayer = new MediaPlayer(_libVLC);
             LoggingService.Instance.LogInfo("MediaPlayer created");
             
-            VideoPlayer.MediaPlayer = _mediaPlayer;
+            VideoView.MediaPlayer = _mediaPlayer;
             LoggingService.Instance.LogInfo("VideoView connected to MediaPlayer");
 
             _mediaPlayer.EndReached += MediaPlayer_EndReached;
@@ -383,6 +388,122 @@ public partial class MainWindow : Window
                 }
             }
         }
+    }
+
+    private void VideoView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2 && _mediaPlayer != null && _viewModel?.CurrentMedia != null)
+        {
+            ToggleFullscreen();
+        }
+    }
+
+    private void VideoView_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        LoggingService.Instance.LogInfo($"VideoView double-click detected: ClickCount={e.ClickCount}, Position=({e.GetPosition(sender as IInputElement)})");
+        if (e.ClickCount == 2 && _mediaPlayer != null && _viewModel?.CurrentMedia != null)
+        {
+            LoggingService.Instance.LogInfo("Entering fullscreen mode...");
+            ToggleFullscreen();
+        }
+    }
+
+    private void VideoOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        LoggingService.Instance.LogInfo($"VideoOverlay double-click: ClickCount={e.ClickCount}, Position=({e.GetPosition(sender as IInputElement)})");
+        if (e.ClickCount == 2 && _mediaPlayer != null && _viewModel?.CurrentMedia != null)
+        {
+            LoggingService.Instance.LogInfo("Entering fullscreen mode...");
+            ToggleFullscreen();
+        }
+    }
+
+    private void VideoBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        LoggingService.Instance.LogInfo($"VideoView double-click detected: ClickCount={e.ClickCount}, Position=({e.GetPosition(sender as IInputElement)})");
+        if (e.ClickCount == 2 && _mediaPlayer != null && _viewModel?.CurrentMedia != null)
+        {
+            LoggingService.Instance.LogInfo("Entering fullscreen mode...");
+            ToggleFullscreen();
+        }
+    }
+
+    private void VideoPlayer_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_mediaPlayer == null || _viewModel?.CurrentMedia == null) return;
+        ToggleFullscreen();
+    }
+
+    private void ToggleFullscreen_Click(object sender, RoutedEventArgs e)
+    {
+        if (_mediaPlayer == null || _viewModel?.CurrentMedia == null) return;
+        ToggleFullscreen();
+    }
+
+    private void ToggleFullscreen()
+    {
+        if (_isFullscreen)
+        {
+            ExitFullscreenMode();
+        }
+        else
+        {
+            EnterFullscreenMode();
+        }
+    }
+
+    private void EnterFullscreenMode()
+    {
+        if (_mediaPlayer == null || _viewModel?.CurrentMedia == null) return;
+        
+        _isFullscreen = true;
+        _previousWindowState = WindowState;
+        _previousWindowStyle = WindowStyle;
+        _previousResizeMode = ResizeMode;
+        
+        FullscreenVideoView.MediaPlayer = _mediaPlayer;
+        VideoView.MediaPlayer = null;
+        
+        WindowStyle = WindowStyle.None;
+        WindowState = WindowState.Maximized;
+        
+        MainGrid.Visibility = Visibility.Collapsed;
+        FullscreenVideoContainer.Visibility = Visibility.Visible;
+        
+        Focus();
+    }
+    
+    private Window? _isFullscreenWindow;
+
+    private void FullscreenContainer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            ExitFullscreenMode();
+        }
+    }
+
+    private void MainWindow_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (_isFullscreen && e.Key == Key.Escape)
+        {
+            ExitFullscreenMode();
+        }
+    }
+
+    private void ExitFullscreenMode()
+    {
+        _isFullscreen = false;
+        
+        VideoView.MediaPlayer = _mediaPlayer;
+        FullscreenVideoView.MediaPlayer = null;
+        
+        WindowStyle = _previousWindowStyle;
+        WindowState = _previousWindowState;
+        ResizeMode = _previousResizeMode;
+        
+        MainGrid.Visibility = Visibility.Visible;
+        FullscreenVideoContainer.Visibility = Visibility.Collapsed;
     }
 }
 
