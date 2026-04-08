@@ -120,20 +120,27 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         
-        <!-- Fullscreen video container -->
-        <Grid x:Name="FullscreenVideoContainer" Grid.RowSpan="3" Visibility="Collapsed" Background="Black"
-              MouseLeftButtonDown="FullscreenContainer_MouseLeftButtonDown">
-            <vlc:VideoView x:Name="FullscreenVideoView" Background="Black"/>
-            <TextBlock Text="Double-click or press ESC to exit" Foreground="Gray" 
-                       FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,30"/>
-        </Grid>
-
-        <Border Grid.Row="0" Background="{DynamicResource PrimaryBrush}" Padding="12,8">
+        <!-- VideoView placed directly in MainGrid for fullscreen -->
+        <vlc:VideoView x:Name="VideoView" Grid.RowSpan="3" Background="Black" Visibility="Collapsed"
+                       MouseDoubleClick="VideoView_MouseDoubleClick">
+            <vlc:VideoView.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Fullscreen" Click="ToggleFullscreen_Click"/>
+                </ContextMenu>
+            </vlc:VideoView.ContextMenu>
+        </vlc:VideoView>
+        
+        <!-- Fullscreen video overlay (not used anymore) -->
+        <!--<Border x:Name="FullscreenOverlay" Grid.RowSpan="3" Background="Black" Visibility="Collapsed" Panel.ZIndex="100" MouseLeftButtonDown="FullscreenOverlay_MouseLeftButtonDown">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+                <vlc:VideoView x:Name="FullscreenVideoView" Background="Black"/>
+                <TextBlock Text="Double-click or press ESC to exit" Foreground="Gray" 
+                           FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,30" IsHitTestVisible="False"/>
+            </Grid>
+        </Border>-->
+
+        <Border x:Name="HeaderBorder" Grid.Row="0" Background="{DynamicResource PrimaryBrush}" Padding="12,8">
+            <Grid>
                 
                 <TextBlock Text="My Media Player" FontSize="18" FontWeight="SemiBold"
                            Foreground="White" VerticalAlignment="Center"/>
@@ -162,14 +169,14 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource PanelStyle}">
+            <Border x:Name="SidebarBorder" Grid.Column="0" Style="{StaticResource PanelStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-
+                    
                     <TextBlock Text="Collections" FontSize="14" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8"/>
 
@@ -191,7 +198,7 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="1" Style="{StaticResource PanelStyle}">
+            <Border Grid.Column="1" x:Name="ContentPanel" Style="{StaticResource PanelStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="220" MinHeight="80"/>
@@ -204,56 +211,14 @@
 
                     <!-- ═══ VIDEO OUTPUT ═══ -->
                     <Border Grid.Row="0" Background="#0D0D0D" CornerRadius="4" ClipToBounds="True">
-                        <Grid>
-                            <!-- VideoView: VLC renders here — no more floating window -->
-                            <vlc:VideoView x:Name="VideoView" Background="Black"/>
-                            <!-- Transparent overlay to capture mouse events -->
-                            <Border Background="#01000000" IsHitTestVisible="True" MouseLeftButtonDown="VideoOverlay_MouseLeftButtonDown">
-                                <Border.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="Fullscreen" Click="ToggleFullscreen_Click"/>
-                                    </ContextMenu>
-                                </Border.ContextMenu>
-                            </Border>
-                            <!-- Fullscreen button overlay -->
-                            <Button x:Name="VideoFullscreenBtn" HorizontalAlignment="Right" VerticalAlignment="Top" 
-                                    Margin="8" Click="ToggleFullscreen_Click" Cursor="Hand" ToolTip="Fullscreen (Double-click)"
-                                    Background="Transparent" BorderThickness="0" Opacity="0.6">
-                                <Button.Style>
-                                    <Style TargetType="Button">
-                                        <Setter Property="Template">
-                                            <Setter.Value>
-                                                <ControlTemplate TargetType="Button">
-                                                    <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="6">
-                                                        <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="White"/>
-                                                    </Border>
-                                                </ControlTemplate>
-                                            </Setter.Value>
-                                        </Setter>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Opacity" Value="1"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                            </Button>
-                            <!-- Placeholder shown when nothing is playing -->
-                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                                        Visibility="{Binding CurrentMedia, Converter={StaticResource InverseBoolToVis}}">
-                                <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="48"
-                                           Foreground="#333333" HorizontalAlignment="Center"/>
-                                <TextBlock Text="No media playing" FontSize="13" Foreground="#555555"
-                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            </StackPanel>
-                        </Grid>
+                        <vlc:VideoView x:Name="InnerVideoView" Background="Black"/>
                     </Border>
 
                     <!-- Drag handle -->
                     <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" Height="5"
                                   Background="{DynamicResource BorderBrush}" Cursor="SizeNS"/>
 
-                    <!-- Now Playing banner -->
+                    <!-- Playlist label -->
                     <TextBlock Grid.Row="2" Text="Playlist" FontSize="14" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0"/>
 
@@ -267,7 +232,7 @@
                         </StackPanel>
                     </Border>
 
-                    <DataGrid x:Name="PlaylistDataGrid" Grid.Row="4"
+                    <DataGrid Grid.Row="4" x:Name="PlaylistDataGrid"
                               ItemsSource="{Binding Playlist}"
                               SelectedItem="{Binding SelectedMediaItem, Mode=TwoWay}"
                               AutoGenerateColumns="False"
@@ -295,13 +260,13 @@
                             </Style>
                         </DataGrid.RowStyle>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
-                            <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="80"/>
-                            <DataGridTextColumn Header="Path" Binding="{Binding FilePath}" Width="200"/>
+                            <DataGridTextColumn Header="Title" Binding="{Binding Title, Mode=OneWay}" Width="*"/>
+                            <DataGridTextColumn Header="Duration" Binding="{Binding DurationText, Mode=OneWay}" Width="80"/>
+                            <DataGridTextColumn Header="Path" Binding="{Binding FilePath, Mode=OneWay}" Width="200"/>
                         </DataGrid.Columns>
                     </DataGrid>
 
-                    <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,8,0,0">
+                    <StackPanel x:Name="PlaylistButtonsPanel" Grid.Row="5" Orientation="Horizontal" Margin="0,8,0,0">
                         <Button Style="{StaticResource ButtonStyle}" Content="Add Files"
                                 Command="{Binding AddFilesCommand}" Margin="0,0,4,0"/>
                         <Button Style="{StaticResource ButtonStyle}" Content="Remove"
@@ -351,7 +316,7 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="2" Background="{DynamicResource SecondaryBrush}" Padding="12,8">
+        <Border x:Name="FooterBorder" Grid.Row="2" Background="{DynamicResource SecondaryBrush}" Padding="12,8">
             <StackPanel>
                 <Border Background="#1A1A1A" CornerRadius="4" Padding="8" Margin="0,0,0,8"
                         Visibility="{Binding CurrentMedia, Converter={StaticResource BoolToVis}}">
